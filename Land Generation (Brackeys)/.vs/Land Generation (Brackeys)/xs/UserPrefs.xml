@@ -1,0 +1,23 @@
+﻿<Properties StartupConfiguration="{9F4D83AD-6E11-842A-711D-00AEA88EE359}|">
+  <MonoDevelop.Ide.Workbench ActiveDocument="Assets/Scripts/FlyingCamera.cs">
+    <Files>
+      <File FileName="Assets/Scripts/Marching.cs" Line="30" Column="6" />
+      <File FileName="Assets/Scripts/Noise.cs" />
+      <File FileName="Assets/Scripts/FlyingCamera.cs" Line="18" Column="51" />
+    </Files>
+    <Pads>
+      <Pad Id="ProjectPad">
+        <State name="__root__">
+          <Node name="Land Generation (Brackeys)" selected="True" />
+        </State>
+      </Pad>
+    </Pads>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.ItemProperties.Assembly-CSharp PreferredExecutionTarget="ac367376-a4c2-43d8-9c5d-e2225ae061f7" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MultiItemStartupConfigurations />
+</Properties>
