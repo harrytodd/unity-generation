@@ -14,9 +14,27 @@ public class Marching : MonoBehaviour
 	public float terrainSurface = 0.5f;
 	public int height = 8;
 	public int width = 32;
+	public float scale;
+	[Range(0,1)] public float amplitude;
+	public int seed;
+	public bool smoothTerrain;
+	public bool flatShaded;
+
+	public bool autoUpdate;
+
 	float[,,] terrainMap;
 
 	int _configIndex = -1;
+
+    private void OnValidate()
+    {
+		if (height < 1)
+			height = 1;
+		if (width < 1)
+			width = 1;
+		if (scale < 0)
+			scale = 0.01f;
+	}
 
     void Start()
     {
@@ -29,29 +47,31 @@ public class Marching : MonoBehaviour
 		BuildMesh();
     }
 
+	public void Generate()
+    {
+		meshFilter = GetComponent<MeshFilter>();
+		meshCollider = GetComponent<MeshCollider>();
+		transform.tag = "Terrain";
+		terrainMap = new float[width + 1, height + 1, width + 1];
+		PopulateTerrainMap();
+		CreateMeshData();
+		BuildMesh();
+	}
+
 	void PopulateTerrainMap()
     {
+		ClearMeshData();
+
 		for (int x = 0; x < width + 1; x++)
         {
-            for (int y = 0; y < height + 1; y++)
+            for (int y = 1; y < height + 1; y++)
             {
                 for (int z = 0; z < width + 1; z++)
                 {
 
-					float thisHeight = (float)height * Noise.SimpleNoise(x, z);
+					float thisHeight = (float)height * Noise.SimpleNoise(x, z, seed, scale, amplitude);
 
-					float point = 0;
-
-					if (y <= thisHeight - terrainSurface)
-						point = 0f;
-					else if (y > thisHeight + terrainSurface)
-						point = 1f;
-					else if (y > thisHeight)
-						point = (float)y - thisHeight;
-					else
-						point = thisHeight - (float)y;
-
-					terrainMap[x, y, z] = point; 
+					terrainMap[x, y, z] = (float)y - thisHeight;
                 }
             }
         }
@@ -65,13 +85,7 @@ public class Marching : MonoBehaviour
             {
                 for (int z = 0; z < width; z++)
                 {
-					float[] cube = new float[8];
-                    for (int i = 0; i < 8; i++)
-                    {
-						Vector3Int corner = new Vector3Int(x, y, z) + CornerTable[i];
-						cube[i] = terrainMap[corner.x, corner.y, corner.z];
-                    }
-					MarchCube(new Vector3(x, y, z), cube);
+					MarchCube(new Vector3Int(x, y, z));
                 }
             }
         }
@@ -89,8 +103,14 @@ public class Marching : MonoBehaviour
 		return configurationIndex;
     }
 
-    void MarchCube(Vector3 position, float[] cube)
+    void MarchCube(Vector3Int position)
     {
+		float[] cube = new float[8];
+		for (int i = 0; i < 8; i++)
+		{
+			cube[i] = SampleTerrain(position + CornerTable[i]);
+		}
+
 		int configIndex = GetCubeConfiguration(cube);
 
 		if (configIndex == 0 || configIndex == 255)
@@ -107,13 +127,36 @@ public class Marching : MonoBehaviour
 				if (indice == -1)
 					return;
 
-				Vector3 vert1 = position + EdgeTable[indice, 0];
-				Vector3 vert2 = position + EdgeTable[indice, 1];
+				Vector3 vert1 = position + CornerTable[EdgeIndexes[indice, 0]];
+				Vector3 vert2 = position + CornerTable[EdgeIndexes[indice, 1]];
 
-				Vector3 vertPosition = (vert1 + vert2) / 2f;
+				Vector3 vertPosition;
 
-				vertices.Add(vertPosition);
-				triangles.Add(vertices.Count - 1);
+				if (smoothTerrain)
+                {
+					float vert1Sample = cube[EdgeIndexes[indice, 0]];
+					float vert2Sample = cube[EdgeIndexes[indice, 1]];
+
+					float difference = vert2Sample - vert1Sample;
+
+					if (difference == 0)
+						difference = terrainSurface;
+					else
+						difference = (terrainSurface - vert1Sample) / difference;
+
+					vertPosition = vert1 + ((vert2 - vert1) * difference);
+
+                } else
+					vertPosition = (vert1 + vert2) / 2f;
+
+				if (flatShaded)
+                {
+					vertices.Add(vertPosition);
+					triangles.Add(vertices.Count - 1);
+                } else
+                {
+					triangles.Add(VertForIndice(vertPosition));
+                }
 
 				edgeIndex++;
 			}
@@ -136,6 +179,37 @@ public class Marching : MonoBehaviour
 		meshCollider.sharedMesh = mesh;
     }
 
+	public void PlaceTerrain (Vector3Int pos)
+    {
+		terrainMap[pos.x, pos.y, pos.z] = 0f;
+		CreateMeshData();
+    }
+
+	public void RemoveTerrain(Vector3 pos)
+	{
+		Vector3Int v3Int = new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z));
+		terrainMap[v3Int.x, v3Int.y, v3Int.z] = 1f;
+		CreateMeshData();
+	}
+
+	float SampleTerrain(Vector3Int point)
+    {
+		return terrainMap[point.x, point.y, point.z];
+    }
+
+	int VertForIndice (Vector3 vert)
+    {
+        for (int i = 0; i < vertices.Count; i++)
+        {
+			if (vertices[i] == vert)
+				return i;
+        }
+
+		vertices.Add(vert);
+		return vertices.Count - 1;
+
+    }
+
 	Vector3Int[] CornerTable = new Vector3Int[8] {
 
 		new Vector3Int(0, 0, 0),
@@ -149,20 +223,20 @@ public class Marching : MonoBehaviour
 
 	};
 
-	Vector3[,] EdgeTable = new Vector3[12, 2] {
+	int[,] EdgeIndexes = new int[12, 2] {
 
-		{ new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 0.0f) },
-		{ new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 0.0f) },
-		{ new Vector3(0.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 0.0f) },
-		{ new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 1.0f, 0.0f) },
-		{ new Vector3(0.0f, 0.0f, 1.0f), new Vector3(1.0f, 0.0f, 1.0f) },
-		{ new Vector3(1.0f, 0.0f, 1.0f), new Vector3(1.0f, 1.0f, 1.0f) },
-		{ new Vector3(0.0f, 1.0f, 1.0f), new Vector3(1.0f, 1.0f, 1.0f) },
-		{ new Vector3(0.0f, 0.0f, 1.0f), new Vector3(0.0f, 1.0f, 1.0f) },
-		{ new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 1.0f) },
-		{ new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 1.0f) },
-		{ new Vector3(1.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f) },
-		{ new Vector3(0.0f, 1.0f, 0.0f), new Vector3(0.0f, 1.0f, 1.0f) }
+		{ 0, 1 },
+		{ 1, 2 },
+		{ 3, 2 },
+		{ 0, 3 },
+		{ 4, 5 },
+		{ 5, 6 },
+		{ 7, 6 },
+		{ 4, 7 },
+		{ 0, 4 },
+		{ 1, 5 },
+		{ 2, 6 },
+		{ 3, 7 }
 
 	};
 
